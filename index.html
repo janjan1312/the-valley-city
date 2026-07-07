@@ -136,7 +136,7 @@
         .admin-form-group select, .admin-form-group input { padding: 10px; border: 1px solid #ccc; border-radius: 4px; transition: border-color 0.3s; }
         .admin-form-group select:focus, .admin-form-group input:focus { outline: none; border-color: var(--primary); }
         .admin-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        .admin-table th, .admin-table td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        .admin-table th, .admin-table td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; vertical-align: top;}
         
         /* Modal Animated Styling */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: center; align-items: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0.3s ease; backdrop-filter: blur(3px); }
@@ -271,15 +271,9 @@
                 <div class="admin-form-group">
                     <label>Court</label>
                     <select id="admin-court">
-                        <option value="grid1">Court 1</option>
-                        <option value="grid2">Court 2</option>
-                        <option value="grid3">Court 3</option>
-                        <option value="grid4">Court 4</option>
-                        <option value="grid5">Court 5</option>
-                        <option value="grid6">Court 6</option>
-                        <option value="grid7">Court 7</option>
-                        <option value="grid8">Court 8</option>
-                        <option value="grid9">Court 9</option>
+                        <option value="grid1">Court 1</option><option value="grid2">Court 2</option><option value="grid3">Court 3</option>
+                        <option value="grid4">Court 4</option><option value="grid5">Court 5</option><option value="grid6">Court 6</option>
+                        <option value="grid7">Court 7</option><option value="grid8">Court 8</option><option value="grid9">Court 9</option>
                     </select>
                 </div>
                 <div class="admin-form-group">
@@ -323,7 +317,7 @@
         <div class="admin-panel">
             <h3>Active Bookings & Events</h3>
             <table class="admin-table">
-                <thead><tr><th>Type</th><th>Date</th><th>Court</th><th>Status/Info</th></tr></thead>
+                <thead><tr><th>Type</th><th>Date & Time</th><th>Court</th><th>Status/Info</th></tr></thead>
                 <tbody id="admin-events-list"></tbody>
             </table>
         </div>
@@ -378,8 +372,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        // Notice deleteDoc is included here now!
-        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        // Notice arrayUnion is now included so we can safely push names to the database!
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
         // --- 1. REPLACE WITH YOUR FIREBASE CONFIG ---
@@ -439,7 +433,6 @@
             }
         };
 
-        // Replaced Tab logic with Dropdown logic
         window.openCourt = function(courtId) {
             document.querySelectorAll('.court-view').forEach(view => view.classList.remove('active'));
             document.getElementById(courtId).classList.add('active');
@@ -524,9 +517,11 @@
             if (isOverlap) { alert("This overlaps with an existing booking or event on this court."); return; }
 
             try {
+                // Notice the newly added playerNames: [] array initialization
                 await addDoc(collection(db, "events"), {
                     type: "Open Play", court: court, dateISO: dateStr, startIdx: startIndex, duration: duration,
-                    startTime: startTime, endTime: endTime, maxPlayers: parseInt(maxPlayers), currentPlayers: 0, price: parseInt(price)
+                    startTime: startTime, endTime: endTime, maxPlayers: parseInt(maxPlayers), currentPlayers: 0,
+                    playerNames: [], price: parseInt(price)
                 });
                 alert(`Success! Open Play scheduled.`);
             } catch (e) {
@@ -543,9 +538,22 @@
             allRecords.forEach(record => {
                 const tr = document.createElement('tr');
                 if (record.type === "Open Play") {
-                    tr.innerHTML = `<td><strong style="color:var(--primary)">Open Play</strong></td><td>${record.dateISO}</td><td>Court ${record.court.replace('grid', '')}</td><td>${record.currentPlayers} / ${record.maxPlayers} Joined (₱${record.price})</td>`;
+                    // Check if playerNames exists and render them
+                    const namesList = (record.playerNames && record.playerNames.length > 0) ? `<br><small style="color: #666;"><strong>Players:</strong> ${record.playerNames.join(', ')}</small>` : '';
+                    
+                    tr.innerHTML = `<td><strong style="color:var(--primary)">Open Play</strong></td>
+                                    <td>${record.dateISO}<br><small style="color: #666; font-weight:bold;">${record.startTime} - ${record.endTime}</small></td>
+                                    <td>Court ${record.court.replace('grid', '')}</td>
+                                    <td>${record.currentPlayers} / ${record.maxPlayers} Joined (₱${record.price})${namesList}</td>`;
                 } else {
-                    tr.innerHTML = `<td>Private</td><td>${record.dateISO}</td><td>Court ${record.court.replace('grid', '')}</td><td>Booked by: <strong>${record.name}</strong></td>`;
+                    // Calculate the text string for the private booking time
+                    const startTimeStr = window.MASTER_TIMES[record.startIdx];
+                    const endTimeStr = window.MASTER_TIMES[record.startIdx + record.duration] || "End";
+                    
+                    tr.innerHTML = `<td>Private</td>
+                                    <td>${record.dateISO}<br><small style="color: #666; font-weight:bold;">${startTimeStr} - ${endTimeStr}</small></td>
+                                    <td>Court ${record.court.replace('grid', '')}</td>
+                                    <td>Booked by: <strong>${record.name}</strong></td>`;
                 }
                 tbody.appendChild(tr);
             });
@@ -554,14 +562,18 @@
 
         // --- Database Management ---
         window.downloadCSV = function() {
-            let csvContent = "Type,Court,Date,Details,Revenue (PHP)\n";
+            // Added the Time column to the CSV Export header
+            let csvContent = "Type,Court,Date,Time,Details,Revenue (PHP)\n";
             
             window.userReservations.forEach(r => {
-                csvContent += `Private,Court ${r.court.replace('grid', '')},${r.dateISO},Booked by ${r.name},${r.duration * window.HOURLY_RATE}\n`;
+                const startTimeStr = window.MASTER_TIMES[r.startIdx];
+                const endTimeStr = window.MASTER_TIMES[r.startIdx + r.duration] || "End";
+                csvContent += `Private,Court ${r.court.replace('grid', '')},${r.dateISO},${startTimeStr} - ${endTimeStr},Booked by ${r.name},${r.duration * window.HOURLY_RATE}\n`;
             });
             
             window.adminEvents.forEach(e => {
-                csvContent += `Open Play,Court ${e.court.replace('grid', '')},${e.dateISO},${e.currentPlayers}/${e.maxPlayers} Joined,${e.currentPlayers * e.price}\n`;
+                const namesStr = (e.playerNames && e.playerNames.length > 0) ? ` (Players: ${e.playerNames.join(' | ')})` : '';
+                csvContent += `Open Play,Court ${e.court.replace('grid', '')},${e.dateISO},${e.startTime} - ${e.endTime},${e.currentPlayers}/${e.maxPlayers} Joined${namesStr},${e.currentPlayers * e.price}\n`;
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -785,12 +797,19 @@
             const eventId = window.activeOpenPlaySlot.dataset.eventId;
             const eventRecord = window.adminEvents.find(e => e.id === eventId);
             
-            if (eventRecord) {
+            // Get the player's name from the modal input
+            const playerName = document.getElementById('op-name').value.trim();
+            
+            if (eventRecord && playerName) {
                 try {
                     const eventRef = doc(db, "events", eventId);
+                    
+                    // Update both the headcount and securely push the specific name into the playerNames array
                     await updateDoc(eventRef, {
-                        currentPlayers: eventRecord.currentPlayers + 1
+                        currentPlayers: eventRecord.currentPlayers + 1,
+                        playerNames: arrayUnion(playerName)
                     });
+                    
                     window.closeModal('open-play-modal');
                     alert("Successfully joined Open Play!");
                 } catch (e) {
