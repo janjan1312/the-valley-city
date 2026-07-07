@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Valley City - Premium Pickleball Courts</title>
+    <style>
+        /* Base Variables & Setup */
+        :root {
+            --primary: #2C3E50;
+            --accent: #b0d12a; 
+            --accent-dark: #8da81d;
+            --bg-color: #f8f9fa;
+            --text-main: #333;
+            
+            /* Weekly View Colors */
+            --slot-avail-bg: #bbf7d0; 
+            --slot-avail-text: #166534;
+            --slot-res-bg: #fca5a5;   
+            --slot-res-text: #991b1b;
+            --slot-sel-bg: #22c55e;   
+            --slot-sel-text: white;
+            --slot-event-bg: #0284c7; 
+            --slot-event-text: white;
+            --slot-joined-bg: #0369a1; 
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 0; line-height: 1.6; scroll-behavior: smooth; overflow-x: hidden; }
+        
+        /* --- Animations --- */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 70% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes subtleZoom { from { transform: scale(1); } to { transform: scale(1.05); } }
+
+        /* Page Container Transitions */
+        .page-container { animation: fadeIn 0.4s ease-out; }
+
+        /* --- Global Header & Navigation --- */
+        header { background-color: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 1rem; }
+        .logo { font-size: 1.5rem; font-weight: bold; cursor: pointer; transition: color 0.3s ease; white-space: nowrap; }
+        .logo:hover { color: var(--accent); }
+        
+        .nav-links { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        .nav-link { color: white; text-decoration: none; font-weight: bold; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.3s ease; font-size: 0.95rem; }
+        .nav-link:hover { border-bottom: 2px solid var(--accent); color: var(--accent); }
+        .nav-link.admin { background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 4px; border: none; }
+        .nav-link.admin:hover { background: var(--accent); color: var(--primary); transform: translateY(-2px); }
+
+        /* --- Page Containers --- */
+        #landing-page { display: block; }
+        #booking-page { display: none; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; min-height: 80vh; }
+        #admin-page { display: none; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; min-height: 80vh; }
+        #admin-login-page { display: none; max-width: 400px; margin: 4rem auto; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; }
+        
+        /* --- Landing Page Sections --- */
+        .hero-wrapper { overflow: hidden; position: relative; }
+        .hero { background: linear-gradient(rgba(44, 62, 80, 0.8), rgba(44, 62, 80, 0.8)), url('https://images.unsplash.com/photo-1622228511776-58c97793d254?auto=format&fit=crop&w=1200&q=80') center/cover; color: white; text-align: center; padding: 7rem 2rem; animation: subtleZoom 20s infinite alternate ease-in-out; }
+        .hero-content { position: relative; z-index: 2; }
+        .hero-content h1 { font-size: 3.5rem; margin-bottom: 1rem; animation: fadeInDown 0.8s ease-out; }
+        .hero-content p { font-size: 1.2rem; margin-bottom: 2rem; max-width: 600px; margin-left: auto; margin-right: auto; animation: fadeInUp 0.8s ease-out 0.2s both; }
+        .cta-button { background-color: var(--accent); color: var(--primary); padding: 15px 30px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); animation: popIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.4s both; box-shadow: 0 4px 15px rgba(176, 209, 42, 0.4); }
+        .cta-button:hover { transform: scale(1.05) translateY(-2px); background-color: var(--accent-dark); box-shadow: 0 6px 20px rgba(176, 209, 42, 0.6); }
+        
+        .content-section { max-width: 1000px; margin: 4rem auto; padding: 0 2rem; text-align: center; }
+        .content-section h2 { color: var(--primary); font-size: 2rem; margin-bottom: 1.5rem; position: relative; display: inline-block; }
+        .content-section h2::after { content: ''; width: 50%; height: 3px; background: var(--accent); position: absolute; bottom: -10px; left: 25%; transition: width 0.3s ease; }
+        .content-section:hover h2::after { width: 80%; left: 10%; }
+        
+        .about-text { font-size: 1.1rem; color: #555; max-width: 800px; margin: 0 auto; line-height: 1.8; animation: fadeInUp 0.8s ease-out; }
+        
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 3rem; }
+        .feature-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--accent); transition: transform 0.3s ease, box-shadow 0.3s ease; animation: fadeInUp 0.8s ease-out; }
+        .feature-card:hover { transform: translateY(-10px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .feature-card h3 { color: var(--primary); margin-bottom: 1rem; }
+
+        /* Footer / Contact Us */
+        footer { background-color: var(--primary); color: white; padding: 4rem 2rem 2rem; margin-top: 4rem; text-align: center; }
+        .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; max-width: 1000px; margin: 0 auto 2rem; }
+        .contact-item h4 { color: var(--accent); margin-bottom: 0.5rem; font-size: 1.2rem; }
+        .contact-item p { margin: 0; color: #ddd; }
+        .footer-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem; color: #aaa; font-size: 0.9rem; }
+
+        /* --- Booking Page: Weekly Grid Styling --- */
+        .booking-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        
+        .court-dropdown-wrapper { margin-bottom: 1.5rem; }
+        .court-dropdown-wrapper select { padding: 10px; font-size: 1.05rem; font-weight: bold; border: 2px solid var(--primary); border-radius: 5px; cursor: pointer; color: var(--primary); background-color: white; outline: none; }
+        
+        .court-view { display: none; background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .court-view.active { display: block; animation: fadeInUp 0.4s ease-out forwards; }
+        
+        .grid-container { width: 100%; overflow-x: auto; margin-bottom: 2rem; border: 1px solid #ddd; border-radius: 8px; }
+        
+        .weekly-grid { 
+            display: grid; 
+            grid-template-columns: 80px repeat(7, minmax(130px, 1fr)); 
+            grid-template-rows: auto repeat(15, minmax(55px, 1fr));
+            gap: 4px; 
+            background-color: #f1f5f9; 
+            padding: 4px; 
+            min-width: 900px; 
+        }
+
+        .grid-header { background-color: white; font-weight: bold; text-align: center; padding: 10px; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; }
+        .grid-header .day { font-size: 0.85rem; text-transform: uppercase; color: #64748b; font-weight: 800;}
+        .grid-header .date { font-size: 1.3rem; color: var(--primary); }
+        
+        .time-label { text-align: right; padding-right: 10px; align-self: center; font-size: 0.85rem; font-weight: bold; color: #64748b; }
+        
+        .slot { border-radius: 4px; padding: 10px 5px; text-align: center; font-size: 0.9rem; font-weight: bold; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); user-select: none; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        
+        .slot.available { background-color: var(--slot-avail-bg); color: var(--slot-avail-text); cursor: pointer; border: 1px solid #86efac; }
+        .slot.available:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); filter: brightness(0.95); }
+        .slot.reserved { background-color: var(--slot-res-bg); color: var(--slot-res-text); cursor: not-allowed; border: 1px solid #f87171; letter-spacing: 1px; animation: fadeIn 0.3s ease; }
+        .slot.selected { background-color: var(--slot-sel-bg); color: var(--slot-sel-text); cursor: pointer; border: 1px solid #16a34a; box-shadow: inset 0 0 0 2px #14532d; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        .slot.event { background-color: var(--slot-event-bg); color: var(--slot-event-text); cursor: pointer; border: 1px solid #0369a1; transition: all 0.3s ease; }
+        .slot.event:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3); filter: brightness(1.1); }
+        .slot.event small { font-weight: normal; font-size: 0.8rem; opacity: 0.9; margin-top: 4px; }
+        .slot.event.joined { background-color: var(--slot-joined-bg); border-color: #0c4a6e; cursor: not-allowed; transform: none; box-shadow: none; animation: popIn 0.4s ease forwards; }
+
+        .booking-actions { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding-top: 1.5rem; }
+        
+        .btn-primary { background-color: var(--accent); color: var(--primary); padding: 12px 24px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; width: 100%;}
+        .btn-primary:hover:not(:disabled) { transform: scale(1.05); background-color: var(--accent-dark); box-shadow: 0 4px 10px rgba(176, 209, 42, 0.3); }
+        .btn-primary:disabled { background-color: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary { background-color: #eee; color: var(--text-main); padding: 12px 24px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; transition: background 0.2s; width: 100%; }
+        .btn-secondary:hover { background-color: #e2e8f0; }
+
+        /* --- Admin & Modals --- */
+        .admin-panel { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 2rem; animation: fadeInUp 0.5s ease-out; }
+        .admin-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .admin-form-group { display: flex; flex-direction: column; }
+        .admin-form-group select, .admin-form-group input { padding: 10px; border: 1px solid #ccc; border-radius: 4px; transition: border-color 0.3s; }
+        .admin-form-group select:focus, .admin-form-group input:focus { outline: none; border-color: var(--primary); }
+        .admin-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .admin-table th, .admin-table td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        
+        /* Modal Animated Styling */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: center; align-items: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0.3s ease; backdrop-filter: blur(3px); }
+        .modal-overlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
+        .modal-content { background: white; padding: 2rem; border-radius: 8px; width: 90%; max-width: 450px; transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .modal-overlay.show .modal-content { transform: scale(1); }
+        
+        .modal-content h3 { margin-top: 0; color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+        .receipt-box { background: #f8f9fa; padding: 1rem; border-radius: 5px; margin-bottom: 1.5rem; border: 1px solid #eee; }
+        .receipt-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+        .form-group { margin-bottom: 1.5rem; text-align: left;}
+        .form-group label { display: block; font-weight: bold; margin-bottom: 0.5rem; }
+        .form-group input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 4px; transition: border-color 0.3s ease; }
+        .form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo" onclick="switchPage('landing-page')">🎾 The Valley City</div>
+        <nav class="nav-links">
+            <a class="nav-link" onclick="switchPage('landing-page')">Home</a>
+            <a class="nav-link" onclick="scrollToSection('about-us')">About Us</a>
+            <a class="nav-link" onclick="switchPage('booking-page')">Book a Court</a>
+            <a class="nav-link" onclick="scrollToSection('contact-us')">Contact Us</a>
+            <a class="nav-link admin" onclick="switchPage('admin-login-page')">Admin</a>
+        </nav>
+    </header>
+
+    <div id="landing-page" class="page-container">
+        <div class="hero-wrapper">
+            <section class="hero">
+                <div class="hero-content">
+                    <h1>Welcome to The Valley City</h1>
+                    <p>Experience premier pickleball on our nine state-of-the-art outdoor courts in the heart of the city.</p>
+                    <button class="cta-button" onclick="switchPage('booking-page')">Book a Court Now</button>
+                </div>
+            </section>
+        </div>
+
+        <section id="about-us" class="content-section">
+            <h2>About The Valley City</h2>
+            <p class="about-text">
+                Located in the vibrant community of Quezon City, Metro Manila, <strong>The Valley City</strong> is a premier destination built by pickleball enthusiasts, for pickleball enthusiasts. Whether you are stepping onto the court for the very first time or you are a seasoned pro preparing for a tournament, our state-of-the-art facility is designed to elevate your game. We believe in the power of community, staying active, and the sheer joy of a perfectly executed dink. Join us for open play, rent a private court, or participate in one of our upcoming local leagues!
+            </p>
+        </section>
+
+        <section class="content-section">
+            <h2>Why Play With Us?</h2>
+            <div class="features-grid">
+                <div class="feature-card" style="animation-delay: 0.1s;"><h3>🏆 Pro Surfaces</h3><p>Tournament-grade nets and dedicated lines for a true competitive experience.</p></div>
+                <div class="feature-card" style="animation-delay: 0.3s;"><h3>🤝 Open Play</h3><p>Meet new players and jump into a game easily through our automated roster system.</p></div>
+                <div class="feature-card" style="animation-delay: 0.5s;"><h3>🏓 Gear Rentals</h3><p>Forgot your gear? Premium paddles and fresh balls are always available on-site.</p></div>
+            </div>
+        </section>
+
+        <footer id="contact-us">
+            <div class="contact-grid">
+                <div class="contact-item">
+                    <h4>Visit Us</h4>
+                    <p>The Valley City Courts<br>Quezon City, Metro Manila<br>Philippines, 1100</p>
+                </div>
+                <div class="contact-item">
+                    <h4>Contact</h4>
+                    <p>Phone: +63 917 123 4567<br>Email: hello@valleycitypickle.com</p>
+                </div>
+                <div class="contact-item">
+                    <h4>Hours of Operation</h4>
+                    <p>Monday - Sunday<br>8:00 AM - 11:00 PM</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                &copy; 2026 The Valley City Pickleball. All rights reserved.
+            </div>
+        </footer>
+    </div>
+
+    <div id="booking-page" class="page-container">
+        <div class="booking-header">
+            <h2>Select a Court & Time</h2>
+            <p style="color:#666; font-size:0.9rem; margin-top: -10px;">Select multiple blocks to book a longer session.</p>
+        </div>
+
+        <div class="court-dropdown-wrapper">
+            <label for="public-court-selector" style="font-weight: bold; margin-right: 10px; color: var(--primary);">Choose Court:</label>
+            <select id="public-court-selector" onchange="openCourt(this.value)">
+                <option value="court1">Court 1</option>
+                <option value="court2">Court 2</option>
+                <option value="court3">Court 3</option>
+                <option value="court4">Court 4</option>
+                <option value="court5">Court 5</option>
+                <option value="court6">Court 6</option>
+                <option value="court7">Court 7</option>
+                <option value="court8">Court 8</option>
+                <option value="court9">Court 9</option>
+            </select>
+        </div>
+
+        <div id="court1" class="court-view active"><div class="grid-container"><div class="weekly-grid" id="grid1"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn1" disabled onclick="openPrivateBookingModal('grid1')">Proceed to Booking</button></div></div>
+        <div id="court2" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid2"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn2" disabled onclick="openPrivateBookingModal('grid2')">Proceed to Booking</button></div></div>
+        <div id="court3" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid3"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn3" disabled onclick="openPrivateBookingModal('grid3')">Proceed to Booking</button></div></div>
+        <div id="court4" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid4"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn4" disabled onclick="openPrivateBookingModal('grid4')">Proceed to Booking</button></div></div>
+        <div id="court5" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid5"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn5" disabled onclick="openPrivateBookingModal('grid5')">Proceed to Booking</button></div></div>
+        <div id="court6" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid6"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn6" disabled onclick="openPrivateBookingModal('grid6')">Proceed to Booking</button></div></div>
+        <div id="court7" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid7"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn7" disabled onclick="openPrivateBookingModal('grid7')">Proceed to Booking</button></div></div>
+        <div id="court8" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid8"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn8" disabled onclick="openPrivateBookingModal('grid8')">Proceed to Booking</button></div></div>
+        <div id="court9" class="court-view"><div class="grid-container"><div class="weekly-grid" id="grid9"></div></div><div class="booking-actions"><span style="font-size: 0.9rem; color: #666;">Timezone: <strong class="tz-display"></strong></span><button class="btn-primary" id="btn9" disabled onclick="openPrivateBookingModal('grid9')">Proceed to Booking</button></div></div>
+    </div>
+
+    <div id="admin-login-page" class="page-container">
+        <h2 style="color: var(--primary); margin-bottom: 2rem;">Admin Login</h2>
+        <div class="form-group">
+            <label for="admin-email">Email Address</label>
+            <input type="email" id="admin-email" placeholder="admin@valleycity.com">
+        </div>
+        <div class="form-group">
+            <label for="admin-password">Password</label>
+            <input type="password" id="admin-password" placeholder="••••••••">
+        </div>
+        <button class="btn-primary" onclick="loginAdmin()">Secure Login</button>
+        <p id="login-error" style="color: #e74c3c; display: none; margin-top: 15px; font-weight: bold;">Invalid credentials.</p>
+    </div>
+
+    <div id="admin-page" class="page-container">
+        <h2>Admin Dashboard</h2>
+        
+        <div class="admin-panel">
+            <h3>Create Open Play Event</h3>
+            <div class="admin-form-row">
+                <div class="admin-form-group">
+                    <label>Court</label>
+                    <select id="admin-court">
+                        <option value="grid1">Court 1</option>
+                        <option value="grid2">Court 2</option>
+                        <option value="grid3">Court 3</option>
+                        <option value="grid4">Court 4</option>
+                        <option value="grid5">Court 5</option>
+                        <option value="grid6">Court 6</option>
+                        <option value="grid7">Court 7</option>
+                        <option value="grid8">Court 8</option>
+                        <option value="grid9">Court 9</option>
+                    </select>
+                </div>
+                <div class="admin-form-group">
+                    <label>Date</label>
+                    <input type="date" id="admin-date">
+                </div>
+                <div class="admin-form-group">
+                    <label>Start Time</label>
+                    <select id="admin-start-time">
+                        <option value="8 AM">8 AM</option><option value="9 AM">9 AM</option><option value="10 AM">10 AM</option>
+                        <option value="11 AM">11 AM</option><option value="12 PM">12 PM</option><option value="1 PM">1 PM</option>
+                        <option value="2 PM">2 PM</option><option value="3 PM">3 PM</option><option value="4 PM">4 PM</option>
+                        <option value="5 PM">5 PM</option><option value="6 PM">6 PM</option><option value="7 PM">7 PM</option>
+                        <option value="8 PM">8 PM</option><option value="9 PM">9 PM</option><option value="10 PM">10 PM</option>
+                    </select>
+                </div>
+                <div class="admin-form-group">
+                    <label>End Time</label>
+                    <select id="admin-end-time">
+                        <option value="9 AM">9 AM</option><option value="10 AM">10 AM</option><option value="11 AM">11 AM</option>
+                        <option value="12 PM">12 PM</option><option value="1 PM">1 PM</option><option value="2 PM">2 PM</option>
+                        <option value="3 PM">3 PM</option><option value="4 PM">4 PM</option><option value="5 PM">5 PM</option>
+                        <option value="6 PM">6 PM</option><option value="7 PM">7 PM</option><option value="8 PM">8 PM</option>
+                        <option value="9 PM" selected>9 PM</option><option value="10 PM">10 PM</option><option value="11 PM">11 PM</option>
+                    </select>
+                </div>
+                <div class="admin-form-group">
+                    <label>Max Players</label>
+                    <input type="number" id="admin-max-players" value="28" min="1">
+                </div>
+                <div class="admin-form-group">
+                    <label>Price (PHP)</label>
+                    <input type="number" id="admin-price" value="350" min="0">
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <button class="btn-primary" style="width: auto;" onclick="createOpenPlay()">Publish Event</button>
+            </div>
+        </div>
+
+        <div class="admin-panel">
+            <h3>Active Bookings & Events</h3>
+            <table class="admin-table">
+                <thead><tr><th>Type</th><th>Date</th><th>Court</th><th>Status/Info</th></tr></thead>
+                <tbody id="admin-events-list"></tbody>
+            </table>
+        </div>
+
+        <div class="admin-panel" style="border-top: 4px solid #f87171;">
+            <h3 style="color: #991b1b;">Database Management</h3>
+            <p>Export your weekly data before clearing the schedule for the new week.</p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-secondary" style="width: auto;" onclick="downloadCSV()">⬇️ Download CSV Data</button>
+                <button class="btn-primary" style="width: auto; background-color: #f87171; color: white;" onclick="clearDatabase()">🗑️ Clear All Data</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="private-booking-modal">
+        <div class="modal-content">
+            <h3>Complete Private Reservation</h3>
+            <div class="receipt-box">
+                <div class="receipt-row"><span>Selected Times:</span><strong id="private-times-list">--</strong></div>
+                <div class="receipt-row"><span>Rate:</span><span>₱300 PHP / hr</span></div>
+                <div class="receipt-row"><span>Total Due:</span><strong id="private-total-price">₱0 PHP</strong></div>
+            </div>
+            <div class="form-group">
+                <label>Reservation Name</label>
+                <input type="text" id="private-name" placeholder="Enter your full name" oninput="validateModalForm('private-name', 'private-confirm-btn')">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" style="width: auto;" onclick="closeModal('private-booking-modal')">Cancel</button>
+                <button class="btn-primary" style="width: auto;" id="private-confirm-btn" disabled onclick="confirmPrivateBooking()">Confirm & Reserve</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="open-play-modal">
+        <div class="modal-content">
+            <h3>Join Open Play Roster</h3>
+            <div class="receipt-box">
+                <div class="receipt-row"><span>Session:</span><strong id="op-time-display">--</strong></div>
+                <div class="receipt-row"><span>Spots Filled:</span><strong id="op-spots-display">--</strong></div>
+                <div class="receipt-row"><span>Entry Fee:</span><strong id="op-fee-display">₱350 PHP</strong></div>
+            </div>
+            <div class="form-group">
+                <label>Player Name</label>
+                <input type="text" id="op-name" placeholder="Enter your full name" oninput="validateModalForm('op-name', 'op-confirm-btn')">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" style="width: auto;" onclick="closeModal('open-play-modal')">Cancel</button>
+                <button class="btn-primary" style="width: auto;" id="op-confirm-btn" disabled onclick="confirmOpenPlay()">Join Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        // Notice deleteDoc is included here now!
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+        // --- 1. REPLACE WITH YOUR FIREBASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDfXUG8oIzIhMmQlxzJyoqhJqIAoKTIQSQ",
+            authDomain: "the-valley-city.firebaseapp.com",
+            projectId: "the-valley-city",
+            storageBucket: "the-valley-city.firebasestorage.app",
+            messagingSenderId: "699072455256",
+            appId: "1:699072455256:web:395e09e84447607f3b602d"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- Global Data States ---
+        window.userReservations = [];
+        window.adminEvents = [];
+        window.activeGridId = null;
+        window.activeOpenPlaySlot = null;
+        window.HOURLY_RATE = 300;
+        window.MASTER_TIMES = ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"];
+
+        // Setup UI basics
+        function getLocalISO(date) {
+            const offset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - offset).toISOString().split('T')[0];
+        }
+        document.getElementById('admin-date').valueAsDate = new Date();
+        document.querySelectorAll('.tz-display').forEach(el => el.innerText = Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+        // --- Navigation ---
+        window.switchPage = function(pageId) {
+            document.getElementById('landing-page').style.display = 'none';
+            document.getElementById('booking-page').style.display = 'none';
+            document.getElementById('admin-page').style.display = 'none';
+            document.getElementById('admin-login-page').style.display = 'none';
+            
+            if (pageId === 'admin-login-page' && auth.currentUser) {
+                document.getElementById('admin-page').style.display = 'block';
+                window.renderAdminTable();
+            } else {
+                document.getElementById(pageId).style.display = 'block';
+            }
+            
+            window.scrollTo(0, 0); 
+            if(pageId === 'booking-page') window.refreshAllGrids();
+        };
+
+        window.scrollToSection = function(sectionId) {
+            if(document.getElementById('landing-page').style.display !== 'block') {
+                window.switchPage('landing-page');
+                setTimeout(() => document.getElementById(sectionId).scrollIntoView({ behavior: 'smooth' }), 100);
+            } else {
+                document.getElementById(sectionId).scrollIntoView({ behavior: 'smooth' });
+            }
+        };
+
+        // Replaced Tab logic with Dropdown logic
+        window.openCourt = function(courtId) {
+            document.querySelectorAll('.court-view').forEach(view => view.classList.remove('active'));
+            document.getElementById(courtId).classList.add('active');
+        };
+
+        // --- Authentication ---
+        window.loginAdmin = function() {
+            const email = document.getElementById('admin-email').value;
+            const pass = document.getElementById('admin-password').value;
+            document.getElementById('login-error').style.display = 'none';
+            
+            signInWithEmailAndPassword(auth, email, pass)
+                .then(() => {
+                    document.getElementById('admin-login-page').style.display = 'none';
+                    document.getElementById('admin-page').style.display = 'block';
+                    window.renderAdminTable();
+                })
+                .catch((error) => {
+                    document.getElementById('login-error').style.display = 'block';
+                });
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user && document.getElementById('admin-login-page').style.display === 'block') {
+                document.getElementById('admin-login-page').style.display = 'none';
+                document.getElementById('admin-page').style.display = 'block';
+                window.renderAdminTable();
+            }
+        });
+
+        // --- Database Listeners ---
+        onSnapshot(collection(db, "reservations"), (snapshot) => {
+            window.userReservations = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                data.id = doc.id;
+                window.userReservations.push(data);
+            });
+            window.refreshAllGrids();
+            if (document.getElementById('admin-page').style.display === 'block') window.renderAdminTable();
+        });
+
+        onSnapshot(collection(db, "events"), (snapshot) => {
+            window.adminEvents = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                data.id = doc.id;
+                window.adminEvents.push(data);
+            });
+            window.refreshAllGrids();
+            if (document.getElementById('admin-page').style.display === 'block') window.renderAdminTable();
+        });
+
+        // --- Admin Functions ---
+        window.createOpenPlay = async function() {
+            const court = document.getElementById('admin-court').value;
+            const dateStr = document.getElementById('admin-date').value; 
+            const startTime = document.getElementById('admin-start-time').value;
+            const endTime = document.getElementById('admin-end-time').value;
+            const maxPlayers = document.getElementById('admin-max-players').value;
+            const price = document.getElementById('admin-price').value;
+
+            if(!dateStr) { alert("Please select a valid date."); return; }
+
+            const startIndex = window.MASTER_TIMES.indexOf(startTime);
+            const endIndex = window.MASTER_TIMES.indexOf(endTime);
+            if (startIndex >= endIndex) { alert("The End Time must be later than the Start Time."); return; }
+            
+            const duration = endIndex - startIndex;
+            let isOverlap = false;
+
+            window.adminEvents.concat(window.userReservations).forEach(e => {
+                if(e.court === court && e.dateISO === dateStr) {
+                    if((startIndex >= e.startIdx && startIndex < e.startIdx + e.duration) || 
+                       (startIndex + duration > e.startIdx && startIndex + duration <= e.startIdx + e.duration) ||
+                       (startIndex <= e.startIdx && startIndex + duration >= e.startIdx + e.duration)) {
+                        isOverlap = true;
+                    }
+                }
+            });
+
+            if (isOverlap) { alert("This overlaps with an existing booking or event on this court."); return; }
+
+            try {
+                await addDoc(collection(db, "events"), {
+                    type: "Open Play", court: court, dateISO: dateStr, startIdx: startIndex, duration: duration,
+                    startTime: startTime, endTime: endTime, maxPlayers: parseInt(maxPlayers), currentPlayers: 0, price: parseInt(price)
+                });
+                alert(`Success! Open Play scheduled.`);
+            } catch (e) {
+                console.error("Error creating event: ", e);
+            }
+        };
+
+        window.renderAdminTable = function() {
+            const tbody = document.getElementById('admin-events-list');
+            tbody.innerHTML = '';
+            
+            const allRecords = [...window.adminEvents, ...window.userReservations].sort((a, b) => new Date(a.dateISO) - new Date(b.dateISO));
+            
+            allRecords.forEach(record => {
+                const tr = document.createElement('tr');
+                if (record.type === "Open Play") {
+                    tr.innerHTML = `<td><strong style="color:var(--primary)">Open Play</strong></td><td>${record.dateISO}</td><td>Court ${record.court.replace('grid', '')}</td><td>${record.currentPlayers} / ${record.maxPlayers} Joined (₱${record.price})</td>`;
+                } else {
+                    tr.innerHTML = `<td>Private</td><td>${record.dateISO}</td><td>Court ${record.court.replace('grid', '')}</td><td>Booked by: <strong>${record.name}</strong></td>`;
+                }
+                tbody.appendChild(tr);
+            });
+            if(allRecords.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No active records.</td></tr>';
+        };
+
+        // --- Database Management ---
+        window.downloadCSV = function() {
+            let csvContent = "Type,Court,Date,Details,Revenue (PHP)\n";
+            
+            window.userReservations.forEach(r => {
+                csvContent += `Private,Court ${r.court.replace('grid', '')},${r.dateISO},Booked by ${r.name},${r.duration * window.HOURLY_RATE}\n`;
+            });
+            
+            window.adminEvents.forEach(e => {
+                csvContent += `Open Play,Court ${e.court.replace('grid', '')},${e.dateISO},${e.currentPlayers}/${e.maxPlayers} Joined,${e.currentPlayers * e.price}\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `ValleyCity_WeeklyReport_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        };
+
+        window.clearDatabase = async function() {
+            if(!confirm("Are you sure you want to delete ALL bookings and events? Did you download the CSV report first?")) return;
+            
+            try {
+                for (const r of window.userReservations) {
+                    await deleteDoc(doc(db, "reservations", r.id));
+                }
+                for (const e of window.adminEvents) {
+                    await deleteDoc(doc(db, "events", e.id));
+                }
+                
+                alert("Database successfully cleared for the new week!");
+                window.refreshAllGrids();
+                window.renderAdminTable();
+                
+            } catch (error) {
+                console.error("Error clearing database:", error);
+                alert("An error occurred while clearing data. Check console.");
+            }
+        };
+
+        // --- Master Grid Rendering Engine ---
+        window.generateWeeklyGrid = function(gridId, btnId) {
+            const grid = document.getElementById(gridId);
+            if (!grid) return;
+            grid.innerHTML = ''; 
+            const occupied = new Set(); 
+
+            const headerCorner = document.createElement('div');
+            headerCorner.className = 'grid-header'; headerCorner.innerText = 'TIME';
+            headerCorner.style.gridColumn = 1; headerCorner.style.gridRow = 1;
+            grid.appendChild(headerCorner);
+
+            const today = new Date();
+            const dates = [];
+            for(let i = 0; i < 7; i++) {
+                let d = new Date(today); d.setDate(today.getDate() + i); dates.push(d);
+                const header = document.createElement('div');
+                header.className = 'grid-header';
+                header.innerHTML = `<span class="day">${d.toLocaleDateString('en-US', {weekday: 'short'})}</span><span class="date">${d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</span>`;
+                header.style.gridColumn = i + 2; header.style.gridRow = 1;
+                grid.appendChild(header);
+            }
+
+            const renderTimes = window.MASTER_TIMES.slice(0, -1);
+            renderTimes.forEach((time, index) => {
+                const label = document.createElement('div');
+                label.className = 'time-label'; label.innerText = time;
+                label.style.gridColumn = 1; label.style.gridRow = index + 2;
+                grid.appendChild(label);
+            });
+
+            // Render Admin Events 
+            window.adminEvents.filter(e => e.court === gridId).forEach(evt => {
+                const dIndex = dates.findIndex(d => getLocalISO(d) === evt.dateISO);
+                if(dIndex === -1) return; 
+
+                const slot = document.createElement('div');
+                slot.className = 'slot event';
+                slot.style.gridColumn = dIndex + 2;
+                slot.style.gridRow = `${evt.startIdx + 2} / span ${evt.duration}`;
+                slot.dataset.eventId = evt.id;
+                
+                if(evt.currentPlayers >= evt.maxPlayers) {
+                    slot.innerHTML = `OPEN PLAY<br><small>FULL (${evt.maxPlayers}/${evt.maxPlayers})</small>`;
+                    slot.classList.add('joined');
+                } else if (evt.currentPlayers > 0) {
+                    slot.innerHTML = `OPEN PLAY<br><small>JOINED (${evt.currentPlayers}/${evt.maxPlayers})</small>`;
+                    slot.classList.add('joined'); 
+                } else {
+                    slot.innerHTML = `OPEN PLAY<br><small>${evt.currentPlayers}/${evt.maxPlayers} Players</small>`;
+                    slot.dataset.timeDisplay = `${dates[dIndex].toLocaleDateString('en-US', {weekday: 'short'})} | ${evt.startTime} - ${evt.endTime}`;
+                    slot.dataset.players = evt.currentPlayers;
+                    slot.dataset.max = evt.maxPlayers;
+                    slot.dataset.price = evt.price;
+                    slot.addEventListener('click', function() { window.openPlayRegistrationModal(this); });
+                }
+                
+                grid.appendChild(slot);
+                for(let i=0; i<evt.duration; i++) occupied.add(`${dIndex}-${evt.startIdx+i}`);
+            });
+
+            // Render User Reservations
+            window.userReservations.filter(e => e.court === gridId).forEach(evt => {
+                const dIndex = dates.findIndex(d => getLocalISO(d) === evt.dateISO);
+                if(dIndex === -1) return;
+
+                const slot = document.createElement('div');
+                slot.className = 'slot reserved';
+                slot.innerText = 'RESERVED';
+                slot.style.gridColumn = dIndex + 2;
+                slot.style.gridRow = `${evt.startIdx + 2} / span ${evt.duration}`;
+                grid.appendChild(slot);
+                
+                for(let i=0; i<evt.duration; i++) occupied.add(`${dIndex}-${evt.startIdx+i}`);
+            });
+
+            // Fill remaining empty grid cells
+            for(let d = 0; d < 7; d++) {
+                for(let t = 0; t < 15; t++) {
+                    if (occupied.has(`${d}-${t}`)) continue;
+
+                    const slot = document.createElement('div');
+                    slot.className = 'slot available'; slot.innerText = 'AVAILABLE';
+                    slot.style.gridColumn = d + 2; slot.style.gridRow = t + 2;
+                    
+                    slot.dataset.dateIso = getLocalISO(dates[d]);
+                    slot.dataset.timeIdx = t;
+                    slot.dataset.timeStr = window.MASTER_TIMES[t];
+                    slot.dataset.dateStrDisplay = dates[d].toLocaleDateString('en-US', {weekday: 'short'}); 
+                    
+                    slot.addEventListener('click', function() {
+                        if (this.classList.contains('available')) {
+                            this.classList.remove('available'); this.classList.add('selected'); this.innerText = 'SELECTED';
+                        } else if (this.classList.contains('selected')) {
+                            this.classList.remove('selected'); this.classList.add('available'); this.innerText = 'AVAILABLE';
+                        }
+                        const selectedCount = grid.querySelectorAll('.slot.selected').length;
+                        document.getElementById(btnId).disabled = selectedCount === 0;
+                    });
+                    
+                    grid.appendChild(slot);
+                }
+            }
+        };
+
+        // Render all 9 grids
+        window.refreshAllGrids = function() {
+            for(let i=1; i<=9; i++) {
+                window.generateWeeklyGrid(`grid${i}`, `btn${i}`);
+            }
+        };
+
+        // --- Modals ---
+        window.closeModal = function(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+            setTimeout(() => {
+                document.querySelectorAll('.modal-content input').forEach(input => input.value = '');
+                document.querySelectorAll('.modal-content .btn-primary').forEach(btn => btn.disabled = true);
+            }, 300);
+        };
+        
+        window.validateModalForm = function(inputId, btnId) {
+            const nameInput = document.getElementById(inputId).value.trim();
+            document.getElementById(btnId).disabled = nameInput === "";
+        };
+
+        // Private Booking
+        window.openPrivateBookingModal = function(gridId) {
+            window.activeGridId = gridId;
+            const grid = document.getElementById(gridId);
+            const selectedSlots = grid.querySelectorAll('.slot.selected');
+            let timeStrings = [];
+            selectedSlots.forEach(slot => timeStrings.push(`${slot.dataset.dateStrDisplay} ${slot.dataset.timeStr}`));
+            document.getElementById('private-times-list').innerHTML = timeStrings.join('<br>');
+            document.getElementById('private-total-price').innerText = `₱${selectedSlots.length * window.HOURLY_RATE} PHP`;
+            
+            document.getElementById('private-booking-modal').classList.add('show');
+        };
+
+        window.confirmPrivateBooking = async function() {
+            const grid = document.getElementById(window.activeGridId);
+            const selectedSlots = grid.querySelectorAll('.slot.selected');
+            const resName = document.getElementById('private-name').value;
+            
+            const groupedByDate = {};
+            selectedSlots.forEach(slot => {
+                const date = slot.dataset.dateIso;
+                const idx = parseInt(slot.dataset.timeIdx);
+                if(!groupedByDate[date]) groupedByDate[date] = [];
+                groupedByDate[date].push(idx);
+            });
+
+            try {
+                for(const [date, indices] of Object.entries(groupedByDate)) {
+                    indices.sort((a,b) => a - b); 
+                    let start = indices[0], prev = indices[0], dur = 1;
+
+                    for(let i = 1; i < indices.length; i++) {
+                        if (indices[i] === prev + 1) {
+                            dur++; prev = indices[i];
+                        } else {
+                            await addDoc(collection(db, "reservations"), { type: "Private", name: resName, court: window.activeGridId, dateISO: date, startIdx: start, duration: dur });
+                            start = indices[i]; prev = indices[i]; dur = 1;
+                        }
+                    }
+                    await addDoc(collection(db, "reservations"), { type: "Private", name: resName, court: window.activeGridId, dateISO: date, startIdx: start, duration: dur });
+                }
+                
+                const btnNumber = window.activeGridId.replace('grid', '');
+                document.getElementById(`btn${btnNumber}`).disabled = true;
+                window.closeModal('private-booking-modal');
+                alert("Reservation saved successfully!");
+
+            } catch (e) {
+                console.error("Error saving booking: ", e);
+                alert("Failed to save reservation. Please try again.");
+            }
+        };
+
+        // Open Play 
+        window.openPlayRegistrationModal = function(slotElement) {
+            window.activeOpenPlaySlot = slotElement;
+            document.getElementById('op-time-display').innerText = slotElement.dataset.timeDisplay;
+            document.getElementById('op-spots-display').innerText = `${slotElement.dataset.players} out of ${slotElement.dataset.max}`;
+            document.getElementById('op-fee-display').innerText = `₱${slotElement.dataset.price} PHP`;
+            
+            document.getElementById('open-play-modal').classList.add('show');
+        };
+
+        window.confirmOpenPlay = async function() {
+            const eventId = window.activeOpenPlaySlot.dataset.eventId;
+            const eventRecord = window.adminEvents.find(e => e.id === eventId);
+            
+            if (eventRecord) {
+                try {
+                    const eventRef = doc(db, "events", eventId);
+                    await updateDoc(eventRef, {
+                        currentPlayers: eventRecord.currentPlayers + 1
+                    });
+                    window.closeModal('open-play-modal');
+                    alert("Successfully joined Open Play!");
+                } catch (e) {
+                    console.error("Error updating Open Play: ", e);
+                    alert("Failed to join. Please try again.");
+                }
+            }
+        };
+
+        // Init initial visual state
+        window.refreshAllGrids();
+    </script>
+</body>
+</html>
