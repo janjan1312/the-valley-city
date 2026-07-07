@@ -23,6 +23,8 @@
             --slot-event-bg: #0284c7; 
             --slot-event-text: white;
             --slot-joined-bg: #0369a1; 
+            --slot-locked-bg: #cbd5e1; /* Gray for temporarily locked slots */
+            --slot-locked-text: #475569;
         }
 
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 0; line-height: 1.6; scroll-behavior: smooth; overflow-x: hidden; }
@@ -114,6 +116,10 @@
         .slot.available { background-color: var(--slot-avail-bg); color: var(--slot-avail-text); cursor: pointer; border: 1px solid #86efac; }
         .slot.available:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); filter: brightness(0.95); }
         .slot.reserved { background-color: var(--slot-res-bg); color: var(--slot-res-text); cursor: not-allowed; border: 1px solid #f87171; letter-spacing: 1px; animation: fadeIn 0.3s ease; }
+        
+        /* New style for temporary holds */
+        .slot.locked { background-color: var(--slot-locked-bg); color: var(--slot-locked-text); cursor: not-allowed; border: 1px solid #94a3b8; animation: fadeIn 0.3s ease; }
+        
         .slot.selected { background-color: var(--slot-sel-bg); color: var(--slot-sel-text); cursor: pointer; border: 1px solid #16a34a; box-shadow: inset 0 0 0 2px #14532d; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         
         .slot.event { background-color: var(--slot-event-bg); color: var(--slot-event-text); cursor: pointer; border: 1px solid #0369a1; transition: all 0.3s ease; }
@@ -335,6 +341,7 @@
     <div class="modal-overlay" id="private-booking-modal">
         <div class="modal-content">
             <h3>Complete Private Reservation</h3>
+            <p style="color: #e74c3c; font-weight: bold; font-size: 0.9rem; margin-top: -10px;">Your times are reserved for the next 5 minutes.</p>
             <div class="receipt-box">
                 <div class="receipt-row"><span>Selected Times:</span><strong id="private-times-list">--</strong></div>
                 <div class="receipt-row"><span>Rate:</span><span>₱300 PHP / hr</span></div>
@@ -345,7 +352,7 @@
                 <input type="text" id="private-name" placeholder="Enter your full name" oninput="validateModalForm('private-name', 'private-confirm-btn')">
             </div>
             <div class="modal-actions">
-                <button class="btn-secondary" style="width: auto;" onclick="closeModal('private-booking-modal')">Cancel</button>
+                <button class="btn-secondary" style="width: auto;" onclick="cancelPrivateBooking()">Cancel</button>
                 <button class="btn-primary" style="width: auto;" id="private-confirm-btn" disabled onclick="confirmPrivateBooking()">Confirm & Reserve</button>
             </div>
         </div>
@@ -372,18 +379,18 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        // Notice arrayUnion is now included so we can safely push names to the database!
+        // Added runTransaction, query, and where for advanced locking
         import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, runTransaction, query, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
         // --- 1. REPLACE WITH YOUR FIREBASE CONFIG ---
         const firebaseConfig = {
-            apiKey: "AIzaSyDfXUG8oIzIhMmQlxzJyoqhJqIAoKTIQSQ",
-            authDomain: "the-valley-city.firebaseapp.com",
-            projectId: "the-valley-city",
-            storageBucket: "the-valley-city.firebasestorage.app",
-            messagingSenderId: "699072455256",
-            appId: "1:699072455256:web:395e09e84447607f3b602d"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -395,6 +402,7 @@
         window.adminEvents = [];
         window.activeGridId = null;
         window.activeOpenPlaySlot = null;
+        window.myHoldIds = []; // NEW: Tracks the holds created by this specific user
         window.HOURLY_RATE = 300;
         window.MASTER_TIMES = ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"];
 
@@ -505,6 +513,9 @@
             let isOverlap = false;
 
             window.adminEvents.concat(window.userReservations).forEach(e => {
+                // Ignore ghost holds when checking overlaps for new events
+                if (e.status === 'hold' && e.expiresAt < Date.now()) return; 
+
                 if(e.court === court && e.dateISO === dateStr) {
                     if((startIndex >= e.startIdx && startIndex < e.startIdx + e.duration) || 
                        (startIndex + duration > e.startIdx && startIndex + duration <= e.startIdx + e.duration) ||
@@ -517,7 +528,6 @@
             if (isOverlap) { alert("This overlaps with an existing booking or event on this court."); return; }
 
             try {
-                // Notice the newly added playerNames: [] array initialization
                 await addDoc(collection(db, "events"), {
                     type: "Open Play", court: court, dateISO: dateStr, startIdx: startIndex, duration: duration,
                     startTime: startTime, endTime: endTime, maxPlayers: parseInt(maxPlayers), currentPlayers: 0,
@@ -533,23 +543,21 @@
             const tbody = document.getElementById('admin-events-list');
             tbody.innerHTML = '';
             
-            const allRecords = [...window.adminEvents, ...window.userReservations].sort((a, b) => new Date(a.dateISO) - new Date(b.dateISO));
+            // Only show confirmed bookings in the admin table, hide temporary holds
+            const confirmedReservations = window.userReservations.filter(r => r.status !== 'hold');
+            const allRecords = [...window.adminEvents, ...confirmedReservations].sort((a, b) => new Date(a.dateISO) - new Date(b.dateISO));
             
             allRecords.forEach(record => {
                 const tr = document.createElement('tr');
                 if (record.type === "Open Play") {
-                    // Check if playerNames exists and render them
                     const namesList = (record.playerNames && record.playerNames.length > 0) ? `<br><small style="color: #666;"><strong>Players:</strong> ${record.playerNames.join(', ')}</small>` : '';
-                    
                     tr.innerHTML = `<td><strong style="color:var(--primary)">Open Play</strong></td>
                                     <td>${record.dateISO}<br><small style="color: #666; font-weight:bold;">${record.startTime} - ${record.endTime}</small></td>
                                     <td>Court ${record.court.replace('grid', '')}</td>
                                     <td>${record.currentPlayers} / ${record.maxPlayers} Joined (₱${record.price})${namesList}</td>`;
                 } else {
-                    // Calculate the text string for the private booking time
                     const startTimeStr = window.MASTER_TIMES[record.startIdx];
                     const endTimeStr = window.MASTER_TIMES[record.startIdx + record.duration] || "End";
-                    
                     tr.innerHTML = `<td>Private</td>
                                     <td>${record.dateISO}<br><small style="color: #666; font-weight:bold;">${startTimeStr} - ${endTimeStr}</small></td>
                                     <td>Court ${record.court.replace('grid', '')}</td>
@@ -562,10 +570,10 @@
 
         // --- Database Management ---
         window.downloadCSV = function() {
-            // Added the Time column to the CSV Export header
             let csvContent = "Type,Court,Date,Time,Details,Revenue (PHP)\n";
             
-            window.userReservations.forEach(r => {
+            const confirmedReservations = window.userReservations.filter(r => r.status !== 'hold');
+            confirmedReservations.forEach(r => {
                 const startTimeStr = window.MASTER_TIMES[r.startIdx];
                 const endTimeStr = window.MASTER_TIMES[r.startIdx + r.duration] || "End";
                 csvContent += `Private,Court ${r.court.replace('grid', '')},${r.dateISO},${startTimeStr} - ${endTimeStr},Booked by ${r.name},${r.duration * window.HOURLY_RATE}\n`;
@@ -593,11 +601,7 @@
                 for (const e of window.adminEvents) {
                     await deleteDoc(doc(db, "events", e.id));
                 }
-                
                 alert("Database successfully cleared for the new week!");
-                window.refreshAllGrids();
-                window.renderAdminTable();
-                
             } catch (error) {
                 console.error("Error clearing database:", error);
                 alert("An error occurred while clearing data. Check console.");
@@ -610,6 +614,7 @@
             if (!grid) return;
             grid.innerHTML = ''; 
             const occupied = new Set(); 
+            const now = Date.now();
 
             const headerCorner = document.createElement('div');
             headerCorner.className = 'grid-header'; headerCorner.innerText = 'TIME';
@@ -646,15 +651,11 @@
                 slot.style.gridRow = `${evt.startIdx + 2} / span ${evt.duration}`;
                 slot.dataset.eventId = evt.id;
                 
-                // Check if the event is completely full
                 if(evt.currentPlayers >= evt.maxPlayers) {
                     slot.innerHTML = `OPEN PLAY<br><small>FULL (${evt.maxPlayers}/${evt.maxPlayers})</small>`;
-                    slot.classList.add('joined'); // Makes it unclickable with dark styling
+                    slot.classList.add('joined');
                 } else {
-                    // If it is NOT full, anyone can still click it (whether 0 players or 27 players)
                     slot.innerHTML = `OPEN PLAY<br><small>${evt.currentPlayers}/${evt.maxPlayers} Joined</small>`;
-                    
-                    // Add the data attributes and the click listener so the modal opens
                     slot.dataset.timeDisplay = `${dates[dIndex].toLocaleDateString('en-US', {weekday: 'short'})} | ${evt.startTime} - ${evt.endTime}`;
                     slot.dataset.players = evt.currentPlayers;
                     slot.dataset.max = evt.maxPlayers;
@@ -666,14 +667,25 @@
                 for(let i=0; i<evt.duration; i++) occupied.add(`${dIndex}-${evt.startIdx+i}`);
             });
 
-            // Render User Reservations
+            // Render User Reservations and Active Holds
             window.userReservations.filter(e => e.court === gridId).forEach(evt => {
                 const dIndex = dates.findIndex(d => getLocalISO(d) === evt.dateISO);
                 if(dIndex === -1) return;
 
+                // Safely ignore expired ghost holds
+                if (evt.status === 'hold' && evt.expiresAt < now) return;
+
                 const slot = document.createElement('div');
-                slot.className = 'slot reserved';
-                slot.innerText = 'RESERVED';
+                
+                // If it's a valid hold, color it gray, otherwise red for confirmed
+                if (evt.status === 'hold') {
+                    slot.className = 'slot locked';
+                    slot.innerText = 'LOCKED';
+                } else {
+                    slot.className = 'slot reserved';
+                    slot.innerText = 'RESERVED';
+                }
+
                 slot.style.gridColumn = dIndex + 2;
                 slot.style.gridRow = `${evt.startIdx + 2} / span ${evt.duration}`;
                 grid.appendChild(slot);
@@ -717,7 +729,7 @@
             }
         };
 
-        // --- Modals ---
+        // --- Modals & Locking Logic ---
         window.closeModal = function(modalId) {
             document.getElementById(modalId).classList.remove('show');
             setTimeout(() => {
@@ -731,23 +743,16 @@
             document.getElementById(btnId).disabled = nameInput === "";
         };
 
-        // Private Booking
-        window.openPrivateBookingModal = function(gridId) {
+        // CREATE HOLD WHEN CLICKING PROCEED
+        window.openPrivateBookingModal = async function(gridId) {
+            const btnNumber = gridId.replace('grid', '');
+            const proceedBtn = document.getElementById(`btn${btnNumber}`);
+            proceedBtn.disabled = true;
+            proceedBtn.innerText = "Securing...";
+
             window.activeGridId = gridId;
             const grid = document.getElementById(gridId);
             const selectedSlots = grid.querySelectorAll('.slot.selected');
-            let timeStrings = [];
-            selectedSlots.forEach(slot => timeStrings.push(`${slot.dataset.dateStrDisplay} ${slot.dataset.timeStr}`));
-            document.getElementById('private-times-list').innerHTML = timeStrings.join('<br>');
-            document.getElementById('private-total-price').innerText = `₱${selectedSlots.length * window.HOURLY_RATE} PHP`;
-            
-            document.getElementById('private-booking-modal').classList.add('show');
-        };
-  
-        window.confirmPrivateBooking = async function() {
-            const grid = document.getElementById(window.activeGridId);
-            const selectedSlots = grid.querySelectorAll('.slot.selected');
-            const resName = document.getElementById('private-name').value;
             
             const groupedByDate = {};
             selectedSlots.forEach(slot => {
@@ -758,30 +763,27 @@
             });
 
             try {
-                // STEP 1: The "Bouncer" Check. Query the database right before saving to ensure no overlaps.
+                window.myHoldIds = [];
+                
+                // 1. Double check there are no active overlaps before creating a hold
                 for(const [date, indices] of Object.entries(groupedByDate)) {
-                    // Fetch latest private reservations for this exact day and court
-                    const q = query(collection(db, "reservations"), where("court", "==", window.activeGridId), where("dateISO", "==", date));
-                    const querySnapshot = await getDocs(q);
-                    let existingBookings = [];
-                    querySnapshot.forEach(d => existingBookings.push(d.data()));
+                    const q = query(collection(db, "reservations"), where("court", "==", gridId), where("dateISO", "==", date));
+                    const snapshot = await getDocs(q);
+                    let existing = [];
+                    snapshot.forEach(d => existing.push(d.data()));
 
-                    // Fetch latest open play events for this exact day and court
-                    const qEvents = query(collection(db, "events"), where("court", "==", window.activeGridId), where("dateISO", "==", date));
-                    const eventSnapshot = await getDocs(qEvents);
-                    eventSnapshot.forEach(d => existingBookings.push(d.data()));
-
-                    // Cross-reference selected times with the fresh database data
                     for(let idx of indices) {
-                        for(let ex of existingBookings) {
+                        for(let ex of existing) {
+                            // Only care about confirmed bookings or active holds
+                            if(ex.status === 'hold' && ex.expiresAt < Date.now()) continue; 
                             if(idx >= ex.startIdx && idx < ex.startIdx + ex.duration) {
-                                throw "Oops! Someone just booked one of these slots right before you. Please choose a different time.";
+                                throw "Oops! Someone else just grabbed this slot.";
                             }
                         }
                     }
                 }
 
-                // STEP 2: If the check passes, save the booking officially
+                // 2. Create the temporary holds
                 for(const [date, indices] of Object.entries(groupedByDate)) {
                     indices.sort((a,b) => a - b); 
                     let start = indices[0], prev = indices[0], dur = 1;
@@ -790,22 +792,65 @@
                         if (indices[i] === prev + 1) {
                             dur++; prev = indices[i];
                         } else {
-                            await addDoc(collection(db, "reservations"), { type: "Private", name: resName, court: window.activeGridId, dateISO: date, startIdx: start, duration: dur });
+                            const holdRef = await addDoc(collection(db, "reservations"), { type: "Private", court: gridId, dateISO: date, startIdx: start, duration: dur, status: "hold", expiresAt: Date.now() + (5 * 60 * 1000) });
+                            window.myHoldIds.push(holdRef.id);
                             start = indices[i]; prev = indices[i]; dur = 1;
                         }
                     }
-                    await addDoc(collection(db, "reservations"), { type: "Private", name: resName, court: window.activeGridId, dateISO: date, startIdx: start, duration: dur });
+                    const holdRef = await addDoc(collection(db, "reservations"), { type: "Private", court: gridId, dateISO: date, startIdx: start, duration: dur, status: "hold", expiresAt: Date.now() + (5 * 60 * 1000) });
+                    window.myHoldIds.push(holdRef.id);
+                }
+
+                // 3. Prepare the visual modal
+                let timeStrings = [];
+                selectedSlots.forEach(slot => timeStrings.push(`${slot.dataset.dateStrDisplay} ${slot.dataset.timeStr}`));
+                document.getElementById('private-times-list').innerHTML = timeStrings.join('<br>');
+                document.getElementById('private-total-price').innerText = `₱${selectedSlots.length * window.HOURLY_RATE} PHP`;
+                document.getElementById('private-booking-modal').classList.add('show');
+                proceedBtn.innerText = "Proceed to Booking";
+
+            } catch (e) {
+                console.error(e);
+                alert(typeof e === 'string' ? e : "Failed to connect to schedule. Please refresh.");
+                proceedBtn.disabled = false;
+                proceedBtn.innerText = "Proceed to Booking";
+                window.refreshAllGrids();
+            }
+        };
+
+        // DELETE HOLD ON CANCEL
+        window.cancelPrivateBooking = async function() {
+            if (window.myHoldIds && window.myHoldIds.length > 0) {
+                for (let id of window.myHoldIds) {
+                    await deleteDoc(doc(db, "reservations", id));
+                }
+                window.myHoldIds = [];
+            }
+            window.closeModal('private-booking-modal');
+            window.refreshAllGrids();
+        };
+
+        // CONFIRM HOLD INTO A REAL BOOKING
+        window.confirmPrivateBooking = async function() {
+            const resName = document.getElementById('private-name').value;
+            try {
+                for(let id of window.myHoldIds) {
+                    await updateDoc(doc(db, "reservations", id), { 
+                        status: "confirmed", 
+                        name: resName,
+                        expiresAt: null // Removes the expiration timer
+                    });
                 }
                 
+                window.myHoldIds = [];
                 const btnNumber = window.activeGridId.replace('grid', '');
                 document.getElementById(`btn${btnNumber}`).disabled = true;
                 window.closeModal('private-booking-modal');
                 alert("Reservation saved successfully!");
 
             } catch (e) {
-                // If the bouncer catches an overlap, it throws the custom error message here
-                console.error("Booking prevented: ", e);
-                alert(typeof e === 'string' ? e : "Failed to save reservation. Please try again.");
+                console.error("Error finalizing booking: ", e);
+                alert("Failed to confirm reservation. Please try again.");
             }
         };
 
@@ -827,22 +872,16 @@
                 try {
                     const eventRef = doc(db, "events", eventId);
                     
-                    // Use a Firebase Transaction to guarantee we don't exceed max players
+                    // Transaction prevents double-booking for the exact same roster spot
                     await runTransaction(db, async (transaction) => {
                         const eventDoc = await transaction.get(eventRef);
-                        
-                        if (!eventDoc.exists()) {
-                            throw "This event no longer exists!";
-                        }
-
+                        if (!eventDoc.exists()) throw "This event no longer exists!";
                         const data = eventDoc.data();
                         
-                        // Final safety check: Is it actually full?
                         if (data.currentPlayers >= data.maxPlayers) {
                             throw "Sorry, someone just took the very last spot!";
                         }
 
-                        // If not full, officially record the player
                         transaction.update(eventRef, {
                             currentPlayers: data.currentPlayers + 1,
                             playerNames: arrayUnion(playerName)
@@ -851,7 +890,6 @@
                     
                     window.closeModal('open-play-modal');
                     alert("Successfully joined Open Play!");
-
                 } catch (e) {
                     console.error("Transaction failed: ", e);
                     alert(typeof e === 'string' ? e : "Failed to join. Please try again.");
