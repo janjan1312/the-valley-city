@@ -646,14 +646,15 @@
                 slot.style.gridRow = `${evt.startIdx + 2} / span ${evt.duration}`;
                 slot.dataset.eventId = evt.id;
                 
+                // Check if the event is completely full
                 if(evt.currentPlayers >= evt.maxPlayers) {
                     slot.innerHTML = `OPEN PLAY<br><small>FULL (${evt.maxPlayers}/${evt.maxPlayers})</small>`;
-                    slot.classList.add('joined');
-                } else if (evt.currentPlayers > 0) {
-                    slot.innerHTML = `OPEN PLAY<br><small>JOINED (${evt.currentPlayers}/${evt.maxPlayers})</small>`;
-                    slot.classList.add('joined'); 
+                    slot.classList.add('joined'); // Makes it unclickable with dark styling
                 } else {
-                    slot.innerHTML = `OPEN PLAY<br><small>${evt.currentPlayers}/${evt.maxPlayers} Players</small>`;
+                    // If it is NOT full, anyone can still click it (whether 0 players or 27 players)
+                    slot.innerHTML = `OPEN PLAY<br><small>${evt.currentPlayers}/${evt.maxPlayers} Joined</small>`;
+                    
+                    // Add the data attributes and the click listener so the modal opens
                     slot.dataset.timeDisplay = `${dates[dIndex].toLocaleDateString('en-US', {weekday: 'short'})} | ${evt.startTime} - ${evt.endTime}`;
                     slot.dataset.players = evt.currentPlayers;
                     slot.dataset.max = evt.maxPlayers;
