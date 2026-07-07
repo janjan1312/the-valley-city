@@ -373,7 +373,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         // Notice arrayUnion is now included so we can safely push names to the database!
-        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, runTransaction, query, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
         // --- 1. REPLACE WITH YOUR FIREBASE CONFIG ---
@@ -743,7 +743,7 @@
             
             document.getElementById('private-booking-modal').classList.add('show');
         };
-
+  
         window.confirmPrivateBooking = async function() {
             const grid = document.getElementById(window.activeGridId);
             const selectedSlots = grid.querySelectorAll('.slot.selected');
@@ -758,6 +758,30 @@
             });
 
             try {
+                // STEP 1: The "Bouncer" Check. Query the database right before saving to ensure no overlaps.
+                for(const [date, indices] of Object.entries(groupedByDate)) {
+                    // Fetch latest private reservations for this exact day and court
+                    const q = query(collection(db, "reservations"), where("court", "==", window.activeGridId), where("dateISO", "==", date));
+                    const querySnapshot = await getDocs(q);
+                    let existingBookings = [];
+                    querySnapshot.forEach(d => existingBookings.push(d.data()));
+
+                    // Fetch latest open play events for this exact day and court
+                    const qEvents = query(collection(db, "events"), where("court", "==", window.activeGridId), where("dateISO", "==", date));
+                    const eventSnapshot = await getDocs(qEvents);
+                    eventSnapshot.forEach(d => existingBookings.push(d.data()));
+
+                    // Cross-reference selected times with the fresh database data
+                    for(let idx of indices) {
+                        for(let ex of existingBookings) {
+                            if(idx >= ex.startIdx && idx < ex.startIdx + ex.duration) {
+                                throw "Oops! Someone just booked one of these slots right before you. Please choose a different time.";
+                            }
+                        }
+                    }
+                }
+
+                // STEP 2: If the check passes, save the booking officially
                 for(const [date, indices] of Object.entries(groupedByDate)) {
                     indices.sort((a,b) => a - b); 
                     let start = indices[0], prev = indices[0], dur = 1;
@@ -779,8 +803,9 @@
                 alert("Reservation saved successfully!");
 
             } catch (e) {
-                console.error("Error saving booking: ", e);
-                alert("Failed to save reservation. Please try again.");
+                // If the bouncer catches an overlap, it throws the custom error message here
+                console.error("Booking prevented: ", e);
+                alert(typeof e === 'string' ? e : "Failed to save reservation. Please try again.");
             }
         };
 
@@ -796,26 +821,40 @@
 
         window.confirmOpenPlay = async function() {
             const eventId = window.activeOpenPlaySlot.dataset.eventId;
-            const eventRecord = window.adminEvents.find(e => e.id === eventId);
-            
-            // Get the player's name from the modal input
             const playerName = document.getElementById('op-name').value.trim();
             
-            if (eventRecord && playerName) {
+            if (eventId && playerName) {
                 try {
                     const eventRef = doc(db, "events", eventId);
                     
-                    // Update both the headcount and securely push the specific name into the playerNames array
-                    await updateDoc(eventRef, {
-                        currentPlayers: eventRecord.currentPlayers + 1,
-                        playerNames: arrayUnion(playerName)
+                    // Use a Firebase Transaction to guarantee we don't exceed max players
+                    await runTransaction(db, async (transaction) => {
+                        const eventDoc = await transaction.get(eventRef);
+                        
+                        if (!eventDoc.exists()) {
+                            throw "This event no longer exists!";
+                        }
+
+                        const data = eventDoc.data();
+                        
+                        // Final safety check: Is it actually full?
+                        if (data.currentPlayers >= data.maxPlayers) {
+                            throw "Sorry, someone just took the very last spot!";
+                        }
+
+                        // If not full, officially record the player
+                        transaction.update(eventRef, {
+                            currentPlayers: data.currentPlayers + 1,
+                            playerNames: arrayUnion(playerName)
+                        });
                     });
                     
                     window.closeModal('open-play-modal');
                     alert("Successfully joined Open Play!");
+
                 } catch (e) {
-                    console.error("Error updating Open Play: ", e);
-                    alert("Failed to join. Please try again.");
+                    console.error("Transaction failed: ", e);
+                    alert(typeof e === 'string' ? e : "Failed to join. Please try again.");
                 }
             }
         };
