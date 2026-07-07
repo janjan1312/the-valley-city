@@ -23,7 +23,7 @@
             --slot-event-bg: #0284c7; 
             --slot-event-text: white;
             --slot-joined-bg: #0369a1; 
-            --slot-locked-bg: #cbd5e1; /* Gray for temporarily locked slots */
+            --slot-locked-bg: #cbd5e1; 
             --slot-locked-text: #475569;
         }
 
@@ -116,10 +116,7 @@
         .slot.available { background-color: var(--slot-avail-bg); color: var(--slot-avail-text); cursor: pointer; border: 1px solid #86efac; }
         .slot.available:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); filter: brightness(0.95); }
         .slot.reserved { background-color: var(--slot-res-bg); color: var(--slot-res-text); cursor: not-allowed; border: 1px solid #f87171; letter-spacing: 1px; animation: fadeIn 0.3s ease; }
-        
-        /* New style for temporary holds */
         .slot.locked { background-color: var(--slot-locked-bg); color: var(--slot-locked-text); cursor: not-allowed; border: 1px solid #94a3b8; animation: fadeIn 0.3s ease; }
-        
         .slot.selected { background-color: var(--slot-sel-bg); color: var(--slot-sel-text); cursor: pointer; border: 1px solid #16a34a; box-shadow: inset 0 0 0 2px #14532d; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         
         .slot.event { background-color: var(--slot-event-bg); color: var(--slot-event-text); cursor: pointer; border: 1px solid #0369a1; transition: all 0.3s ease; }
@@ -341,7 +338,11 @@
     <div class="modal-overlay" id="private-booking-modal">
         <div class="modal-content">
             <h3>Complete Private Reservation</h3>
-            <p style="color: #e74c3c; font-weight: bold; font-size: 0.9rem; margin-top: -10px;">Your times are reserved for the next 5 minutes.</p>
+            
+            <p style="color: #e74c3c; font-weight: bold; font-size: 0.9rem; margin-top: -10px;">
+                Hold expires in: <span id="hold-timer">05:00</span>
+            </p>
+            
             <div class="receipt-box">
                 <div class="receipt-row"><span>Selected Times:</span><strong id="private-times-list">--</strong></div>
                 <div class="receipt-row"><span>Rate:</span><span>₱300 PHP / hr</span></div>
@@ -379,7 +380,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        // Added runTransaction, query, and where for advanced locking
         import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, runTransaction, query, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
@@ -402,7 +402,9 @@
         window.adminEvents = [];
         window.activeGridId = null;
         window.activeOpenPlaySlot = null;
-        window.myHoldIds = []; // NEW: Tracks the holds created by this specific user
+        window.myHoldIds = []; 
+        window.myHoldExpirationTime = 0; // NEW: Tracks exactly when the lock ends
+        window.holdInterval = null;      // NEW: Controls the visual countdown timer
         window.HOURLY_RATE = 300;
         window.MASTER_TIMES = ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"];
 
@@ -513,7 +515,6 @@
             let isOverlap = false;
 
             window.adminEvents.concat(window.userReservations).forEach(e => {
-                // Ignore ghost holds when checking overlaps for new events
                 if (e.status === 'hold' && e.expiresAt < Date.now()) return; 
 
                 if(e.court === court && e.dateISO === dateStr) {
@@ -543,7 +544,6 @@
             const tbody = document.getElementById('admin-events-list');
             tbody.innerHTML = '';
             
-            // Only show confirmed bookings in the admin table, hide temporary holds
             const confirmedReservations = window.userReservations.filter(r => r.status !== 'hold');
             const allRecords = [...window.adminEvents, ...confirmedReservations].sort((a, b) => new Date(a.dateISO) - new Date(b.dateISO));
             
@@ -672,12 +672,10 @@
                 const dIndex = dates.findIndex(d => getLocalISO(d) === evt.dateISO);
                 if(dIndex === -1) return;
 
-                // Safely ignore expired ghost holds
                 if (evt.status === 'hold' && evt.expiresAt < now) return;
 
                 const slot = document.createElement('div');
                 
-                // If it's a valid hold, color it gray, otherwise red for confirmed
                 if (evt.status === 'hold') {
                     slot.className = 'slot locked';
                     slot.innerText = 'LOCKED';
@@ -765,7 +763,7 @@
             try {
                 window.myHoldIds = [];
                 
-                // 1. Double check there are no active overlaps before creating a hold
+                // 1. Double check overlaps
                 for(const [date, indices] of Object.entries(groupedByDate)) {
                     const q = query(collection(db, "reservations"), where("court", "==", gridId), where("dateISO", "==", date));
                     const snapshot = await getDocs(q);
@@ -774,7 +772,6 @@
 
                     for(let idx of indices) {
                         for(let ex of existing) {
-                            // Only care about confirmed bookings or active holds
                             if(ex.status === 'hold' && ex.expiresAt < Date.now()) continue; 
                             if(idx >= ex.startIdx && idx < ex.startIdx + ex.duration) {
                                 throw "Oops! Someone else just grabbed this slot.";
@@ -783,7 +780,10 @@
                     }
                 }
 
-                // 2. Create the temporary holds
+                // 2. Set the global expiration time (5 minutes from right now)
+                window.myHoldExpirationTime = Date.now() + (5 * 60 * 1000);
+
+                // 3. Create the temporary holds in the DB
                 for(const [date, indices] of Object.entries(groupedByDate)) {
                     indices.sort((a,b) => a - b); 
                     let start = indices[0], prev = indices[0], dur = 1;
@@ -792,16 +792,33 @@
                         if (indices[i] === prev + 1) {
                             dur++; prev = indices[i];
                         } else {
-                            const holdRef = await addDoc(collection(db, "reservations"), { type: "Private", court: gridId, dateISO: date, startIdx: start, duration: dur, status: "hold", expiresAt: Date.now() + (5 * 60 * 1000) });
+                            const holdRef = await addDoc(collection(db, "reservations"), { type: "Private", court: gridId, dateISO: date, startIdx: start, duration: dur, status: "hold", expiresAt: window.myHoldExpirationTime });
                             window.myHoldIds.push(holdRef.id);
                             start = indices[i]; prev = indices[i]; dur = 1;
                         }
                     }
-                    const holdRef = await addDoc(collection(db, "reservations"), { type: "Private", court: gridId, dateISO: date, startIdx: start, duration: dur, status: "hold", expiresAt: Date.now() + (5 * 60 * 1000) });
+                    const holdRef = await addDoc(collection(db, "reservations"), { type: "Private", court: gridId, dateISO: date, startIdx: start, duration: dur, status: "hold", expiresAt: window.myHoldExpirationTime });
                     window.myHoldIds.push(holdRef.id);
                 }
 
-                // 3. Prepare the visual modal
+                // 4. Start the visual countdown timer
+                clearInterval(window.holdInterval);
+                let timeLeft = 5 * 60; // 5 minutes in seconds
+                document.getElementById('hold-timer').innerText = "05:00";
+                
+                window.holdInterval = setInterval(() => {
+                    timeLeft--;
+                    let m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                    let s = (timeLeft % 60).toString().padStart(2, '0');
+                    document.getElementById('hold-timer').innerText = `${m}:${s}`;
+                    
+                    if (timeLeft <= 0) {
+                        alert("Your 5-minute hold has expired. The time slot has been released.");
+                        window.cancelPrivateBooking();
+                    }
+                }, 1000);
+
+                // 5. Show the modal
                 let timeStrings = [];
                 selectedSlots.forEach(slot => timeStrings.push(`${slot.dataset.dateStrDisplay} ${slot.dataset.timeStr}`));
                 document.getElementById('private-times-list').innerHTML = timeStrings.join('<br>');
@@ -818,8 +835,9 @@
             }
         };
 
-        // DELETE HOLD ON CANCEL
+        // DELETE HOLD ON CANCEL OR TIMEOUT
         window.cancelPrivateBooking = async function() {
+            clearInterval(window.holdInterval); // Stop the countdown
             if (window.myHoldIds && window.myHoldIds.length > 0) {
                 for (let id of window.myHoldIds) {
                     await deleteDoc(doc(db, "reservations", id));
@@ -832,13 +850,22 @@
 
         // CONFIRM HOLD INTO A REAL BOOKING
         window.confirmPrivateBooking = async function() {
+            // NEW SAFETY CHECK: Is the user clicking this after the 5 minutes have strictly passed?
+            if (Date.now() > window.myHoldExpirationTime) {
+                alert("Your hold expired before you could confirm! The slot has been released.");
+                window.cancelPrivateBooking();
+                return;
+            }
+
+            clearInterval(window.holdInterval); // Stop the countdown
             const resName = document.getElementById('private-name').value;
+            
             try {
                 for(let id of window.myHoldIds) {
                     await updateDoc(doc(db, "reservations", id), { 
                         status: "confirmed", 
                         name: resName,
-                        expiresAt: null // Removes the expiration timer
+                        expiresAt: null 
                     });
                 }
                 
@@ -872,7 +899,6 @@
                 try {
                     const eventRef = doc(db, "events", eventId);
                     
-                    // Transaction prevents double-booking for the exact same roster spot
                     await runTransaction(db, async (transaction) => {
                         const eventDoc = await transaction.get(eventRef);
                         if (!eventDoc.exists()) throw "This event no longer exists!";
@@ -897,7 +923,6 @@
             }
         };
 
-        // Init initial visual state
         window.refreshAllGrids();
     </script>
 </body>
