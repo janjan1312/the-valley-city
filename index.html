@@ -140,6 +140,7 @@
         .admin-form-group select:focus, .admin-form-group input:focus { outline: none; border-color: var(--primary); }
         .admin-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
         .admin-table th, .admin-table td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; vertical-align: top;}
+        .admin-table th { background-color: #f8f9fa; }
         
         /* Modal Animated Styling */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: center; align-items: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0.3s ease; backdrop-filter: blur(3px); }
@@ -155,6 +156,10 @@
         .form-group input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 4px; transition: border-color 0.3s ease; }
         .form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1); }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* Delete buttons */
+        .btn-delete { padding: 6px 12px; font-size: 0.85rem; background-color: #fee2e2; color: #b11b1b; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-weight: bold;}
+        .btn-delete:hover { background-color: #fca5a5; color: white; }
 
     </style>
 </head>
@@ -319,10 +324,12 @@
 
         <div class="admin-panel">
             <h3>Active Bookings & Events</h3>
-            <table class="admin-table">
-                <thead><tr><th>Type</th><th>Date & Time</th><th>Court</th><th>Status/Info</th></tr></thead>
-                <tbody id="admin-events-list"></tbody>
-            </table>
+            <div style="overflow-x: auto;">
+                <table class="admin-table">
+                    <thead><tr><th>Type</th><th>Date & Time</th><th>Court</th><th>Status/Info</th><th>Actions</th></tr></thead>
+                    <tbody id="admin-events-list"></tbody>
+                </table>
+            </div>
         </div>
 
         <div class="admin-panel" style="border-top: 4px solid #f87171;">
@@ -338,11 +345,9 @@
     <div class="modal-overlay" id="private-booking-modal">
         <div class="modal-content">
             <h3>Complete Private Reservation</h3>
-            
             <p style="color: #e74c3c; font-weight: bold; font-size: 0.9rem; margin-top: -10px;">
                 Hold expires in: <span id="hold-timer">05:00</span>
             </p>
-            
             <div class="receipt-box">
                 <div class="receipt-row"><span>Selected Times:</span><strong id="private-times-list">--</strong></div>
                 <div class="receipt-row"><span>Rate:</span><span>₱300 PHP / hr</span></div>
@@ -380,7 +385,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, runTransaction, query, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        // arrayRemove is now imported here
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, runTransaction, query, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
         // --- 1. REPLACE WITH YOUR FIREBASE CONFIG ---
@@ -403,8 +409,8 @@
         window.activeGridId = null;
         window.activeOpenPlaySlot = null;
         window.myHoldIds = []; 
-        window.myHoldExpirationTime = 0; // NEW: Tracks exactly when the lock ends
-        window.holdInterval = null;      // NEW: Controls the visual countdown timer
+        window.myHoldExpirationTime = 0; 
+        window.holdInterval = null;      
         window.HOURLY_RATE = 300;
         window.MASTER_TIMES = ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"];
 
@@ -539,6 +545,54 @@
                 console.error("Error creating event: ", e);
             }
         };
+        
+        // NEW ADMIN FUNCTION: Delete Private Booking
+        window.deletePrivateBooking = async function(docId) {
+            if(!confirm("Are you sure you want to cancel and delete this private booking?")) return;
+            try {
+                await deleteDoc(doc(db, "reservations", docId));
+                // Alert isn't strictly necessary since the real-time listener will visually update the table instantly
+            } catch(e) {
+                console.error("Error deleting booking:", e);
+                alert("Failed to cancel booking.");
+            }
+        };
+
+        // NEW ADMIN FUNCTION: Delete Open Play Event
+        window.deleteEvent = async function(docId) {
+            if(!confirm("Are you sure you want to completely delete this Open Play event?")) return;
+            try {
+                await deleteDoc(doc(db, "events", docId));
+            } catch(e) {
+                console.error("Error deleting event:", e);
+                alert("Failed to delete event.");
+            }
+        };
+
+        // NEW ADMIN FUNCTION: Remove a single player from an Open Play Event
+        window.removePlayerFromEvent = async function(eventId, playerName) {
+            if(!confirm(`Are you sure you want to remove "${playerName}" from this session?`)) return;
+            try {
+                const eventRef = doc(db, "events", eventId);
+                
+                // Using transaction again to safely drop the count and remove the exact name
+                await runTransaction(db, async (transaction) => {
+                    const eventDoc = await transaction.get(eventRef);
+                    if (!eventDoc.exists()) throw "Event not found!";
+                    const data = eventDoc.data();
+                    
+                    if (data.playerNames && data.playerNames.includes(playerName)) {
+                        transaction.update(eventRef, {
+                            currentPlayers: data.currentPlayers - 1,
+                            playerNames: arrayRemove(playerName)
+                        });
+                    }
+                });
+            } catch(e) {
+                console.error("Error removing player:", e);
+                alert("Failed to remove player.");
+            }
+        };
 
         window.renderAdminTable = function() {
             const tbody = document.getElementById('admin-events-list');
@@ -550,22 +604,29 @@
             allRecords.forEach(record => {
                 const tr = document.createElement('tr');
                 if (record.type === "Open Play") {
-                    const namesList = (record.playerNames && record.playerNames.length > 0) ? `<br><small style="color: #666;"><strong>Players:</strong> ${record.playerNames.join(', ')}</small>` : '';
+                    // Update to include the [x] button for each player
+                    const namesListHTML = (record.playerNames && record.playerNames.length > 0) ? 
+                        `<br><small style="color: #666;"><strong>Players:</strong><ul style="margin: 5px 0; padding-left: 20px;">
+                            ${record.playerNames.map(p => `<li>${p} <span style="color: #e74c3c; cursor: pointer; font-weight: bold; margin-left: 5px;" title="Remove Player" onclick="removePlayerFromEvent('${record.id}', '${p.replace(/'/g, "\\'")}')">[x]</span></li>`).join('')}
+                        </ul></small>` : '';
+                        
                     tr.innerHTML = `<td><strong style="color:var(--primary)">Open Play</strong></td>
                                     <td>${record.dateISO}<br><small style="color: #666; font-weight:bold;">${record.startTime} - ${record.endTime}</small></td>
                                     <td>Court ${record.court.replace('grid', '')}</td>
-                                    <td>${record.currentPlayers} / ${record.maxPlayers} Joined (₱${record.price})${namesList}</td>`;
+                                    <td>${record.currentPlayers} / ${record.maxPlayers} Joined (₱${record.price})${namesListHTML}</td>
+                                    <td><button class="btn-delete" onclick="deleteEvent('${record.id}')">Delete Event</button></td>`;
                 } else {
                     const startTimeStr = window.MASTER_TIMES[record.startIdx];
                     const endTimeStr = window.MASTER_TIMES[record.startIdx + record.duration] || "End";
                     tr.innerHTML = `<td>Private</td>
                                     <td>${record.dateISO}<br><small style="color: #666; font-weight:bold;">${startTimeStr} - ${endTimeStr}</small></td>
                                     <td>Court ${record.court.replace('grid', '')}</td>
-                                    <td>Booked by: <strong>${record.name}</strong></td>`;
+                                    <td>Booked by: <strong>${record.name}</strong></td>
+                                    <td><button class="btn-delete" onclick="deletePrivateBooking('${record.id}')">Cancel Booking</button></td>`;
                 }
                 tbody.appendChild(tr);
             });
-            if(allRecords.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No active records.</td></tr>';
+            if(allRecords.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No active records.</td></tr>';
         };
 
         // --- Database Management ---
@@ -640,7 +701,6 @@
                 grid.appendChild(label);
             });
 
-            // Render Admin Events 
             window.adminEvents.filter(e => e.court === gridId).forEach(evt => {
                 const dIndex = dates.findIndex(d => getLocalISO(d) === evt.dateISO);
                 if(dIndex === -1) return; 
@@ -667,7 +727,6 @@
                 for(let i=0; i<evt.duration; i++) occupied.add(`${dIndex}-${evt.startIdx+i}`);
             });
 
-            // Render User Reservations and Active Holds
             window.userReservations.filter(e => e.court === gridId).forEach(evt => {
                 const dIndex = dates.findIndex(d => getLocalISO(d) === evt.dateISO);
                 if(dIndex === -1) return;
@@ -691,7 +750,6 @@
                 for(let i=0; i<evt.duration; i++) occupied.add(`${dIndex}-${evt.startIdx+i}`);
             });
 
-            // Fill remaining empty grid cells
             for(let d = 0; d < 7; d++) {
                 for(let t = 0; t < 15; t++) {
                     if (occupied.has(`${d}-${t}`)) continue;
@@ -720,7 +778,6 @@
             }
         };
 
-        // Render all 9 grids
         window.refreshAllGrids = function() {
             for(let i=1; i<=9; i++) {
                 window.generateWeeklyGrid(`grid${i}`, `btn${i}`);
@@ -741,7 +798,6 @@
             document.getElementById(btnId).disabled = nameInput === "";
         };
 
-        // CREATE HOLD WHEN CLICKING PROCEED
         window.openPrivateBookingModal = async function(gridId) {
             const btnNumber = gridId.replace('grid', '');
             const proceedBtn = document.getElementById(`btn${btnNumber}`);
@@ -763,7 +819,6 @@
             try {
                 window.myHoldIds = [];
                 
-                // 1. Double check overlaps
                 for(const [date, indices] of Object.entries(groupedByDate)) {
                     const q = query(collection(db, "reservations"), where("court", "==", gridId), where("dateISO", "==", date));
                     const snapshot = await getDocs(q);
@@ -780,10 +835,8 @@
                     }
                 }
 
-                // 2. Set the global expiration time (5 minutes from right now)
                 window.myHoldExpirationTime = Date.now() + (5 * 60 * 1000);
 
-                // 3. Create the temporary holds in the DB
                 for(const [date, indices] of Object.entries(groupedByDate)) {
                     indices.sort((a,b) => a - b); 
                     let start = indices[0], prev = indices[0], dur = 1;
@@ -801,9 +854,8 @@
                     window.myHoldIds.push(holdRef.id);
                 }
 
-                // 4. Start the visual countdown timer
                 clearInterval(window.holdInterval);
-                let timeLeft = 5 * 60; // 5 minutes in seconds
+                let timeLeft = 5 * 60; 
                 document.getElementById('hold-timer').innerText = "05:00";
                 
                 window.holdInterval = setInterval(() => {
@@ -818,7 +870,6 @@
                     }
                 }, 1000);
 
-                // 5. Show the modal
                 let timeStrings = [];
                 selectedSlots.forEach(slot => timeStrings.push(`${slot.dataset.dateStrDisplay} ${slot.dataset.timeStr}`));
                 document.getElementById('private-times-list').innerHTML = timeStrings.join('<br>');
@@ -835,9 +886,8 @@
             }
         };
 
-        // DELETE HOLD ON CANCEL OR TIMEOUT
         window.cancelPrivateBooking = async function() {
-            clearInterval(window.holdInterval); // Stop the countdown
+            clearInterval(window.holdInterval); 
             if (window.myHoldIds && window.myHoldIds.length > 0) {
                 for (let id of window.myHoldIds) {
                     await deleteDoc(doc(db, "reservations", id));
@@ -848,16 +898,14 @@
             window.refreshAllGrids();
         };
 
-        // CONFIRM HOLD INTO A REAL BOOKING
         window.confirmPrivateBooking = async function() {
-            // NEW SAFETY CHECK: Is the user clicking this after the 5 minutes have strictly passed?
             if (Date.now() > window.myHoldExpirationTime) {
                 alert("Your hold expired before you could confirm! The slot has been released.");
                 window.cancelPrivateBooking();
                 return;
             }
 
-            clearInterval(window.holdInterval); // Stop the countdown
+            clearInterval(window.holdInterval); 
             const resName = document.getElementById('private-name').value;
             
             try {
@@ -881,7 +929,6 @@
             }
         };
 
-        // Open Play 
         window.openPlayRegistrationModal = function(slotElement) {
             window.activeOpenPlaySlot = slotElement;
             document.getElementById('op-time-display').innerText = slotElement.dataset.timeDisplay;
